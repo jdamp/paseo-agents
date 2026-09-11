@@ -1,0 +1,139 @@
+name: Paseo agent image
+
+on:
+  push:
+    paths:
+      - images/paseo/**
+      - .dockerignore
+      - .github/workflows/paseo-image.yaml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: paseo-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jdamp/paseo-agents
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Read pinned versions
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source images/paseo/versions.env
+          set +a
+          CODEX_VERSION="$(jq -r '.dependencies["@openai/codex"]' images/paseo/package.json)"
+          PI_VERSION="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' images/paseo/package.json)"
+          PI_MCP_ADAPTER_VERSION="$(jq -r '.dependencies["pi-mcp-adapter"]' images/paseo/package.json)"
+          IMAGE_VERSION="${PASEO_VERSION}-codex${CODEX_VERSION}-pi${PI_VERSION}"
+          {
+            echo "image_version=${IMAGE_VERSION}"
+            echo "paseo_version=${PASEO_VERSION}"
+            echo "paseo_digest=${PASEO_DIGEST}"
+            echo "build_args<<BUILD_ARGS"
+            for name in PASEO_VERSION PASEO_DIGEST KUBECTL_VERSION KUSTOMIZE_VERSION HELM_VERSION SOPS_VERSION KUBESEAL_VERSION GH_VERSION CODEX_VERSION PI_VERSION PI_MCP_ADAPTER_VERSION; do
+              printf '%s=%s\n' "$name" "${!name}"
+            done
+            printf 'BUILD_DATE=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'REVISION=%s\n' "$GITHUB_SHA"
+            printf 'IMAGE_VERSION=%s\n' "$IMAGE_VERSION"
+            echo "BUILD_ARGS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build validation image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: images/paseo/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/paseo-agents:test
+          build-args: ${{ steps.versions.outputs.build_args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify architecture and image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect local/paseo-agents:test --format '{{.Architecture}}')" = amd64
+          test "$(docker image inspect local/paseo-agents:test --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "${{ steps.versions.outputs.image_version }}"
+          test "$(docker image inspect local/paseo-agents:test --format '{{index .Config.Labels "io.paseo.base.version"}}')" = "${{ steps.versions.outputs.paseo_version }}"
+          test "$(docker image inspect local/paseo-agents:test --format '{{index .Config.Labels "io.paseo.base.digest"}}')" = "${{ steps.versions.outputs.paseo_digest }}"
+          test "$(docker image inspect local/paseo-agents:test --format '{{json .Config.Entrypoint}}')" = '["/usr/bin/tini","--","/usr/local/bin/paseo-docker-entrypoint"]'
+
+      - name: Run image and daemon smoke tests
+        run: images/paseo/smoke-test.sh local/paseo-agents:test
+
+      - name: Scan image for critical vulnerabilities and secrets
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/paseo-agents:test
+          scanners: vuln,secret
+          severity: CRITICAL
+          ignore-unfixed: true
+          trivyignores: images/paseo/.trivyignore.yaml
+          exit-code: "1"
+          format: table
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags and labels
+        id: metadata
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.versions.outputs.image_version }}
+            type=raw,value=${{ github.sha }}
+
+      - name: Publish verified image with SBOM and provenance
+        id: publish
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: images/paseo/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          build-args: ${{ steps.versions.outputs.build_args }}
+          cache-from: type=gha
+          provenance: mode=max
+          sbom: true
+
+      - name: Write publication summary
+        shell: bash
+        run: |
+          {
+            echo '### Published Paseo agent image'
+            echo
+            echo '- Tag: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.image_version }}`'
+            echo '- Commit tag: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}`'
+            echo '- Manifest digest: `${{ steps.publish.outputs.digest }}`'
+            echo '- SBOM and provenance: attached by BuildKit'
+          } >> "$GITHUB_STEP_SUMMARY"

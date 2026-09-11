@@ -1,0 +1,30 @@
+vulnerabilities:
+  - id: CVE-2026-59873
+    paths:
+      - usr/local/lib/node_modules/npm/node_modules/tar/package.json
+    expired_at: 2026-10-15
+    statement: Inherited unchanged from the digest-pinned Paseo base. The affected npm-internal tar is not used to start Paseo; replace through the next upstream Paseo/Node base refresh.
+
+  - id: CVE-2025-68121
+    paths:
+      - usr/local/lib/node_modules/@getpaseo/server/node_modules/@esbuild/linux-x64/bin/esbuild
+    expired_at: 2026-10-15
+    statement: Inherited unchanged from the digest-pinned Paseo base. This esbuild binary is a packaged build dependency, not the running Paseo daemon; replace through the next upstream Paseo refresh.
+
+  - id: CVE-2026-56854
+    paths:
+      - usr/local/bin/helm
+    expired_at: 2026-10-15
+    statement: Helm 4.2.4 is the latest upstream release. The vulnerable SSH server source-address authorization path is not exposed by this client-only CLI; remove when Helm publishes a rebuild with x/crypto 0.55.0 or later.
+
+  - id: CVE-2025-68121
+    paths:
+      - usr/local/bin/kustomize
+    expired_at: 2026-10-15
+    statement: Kustomize 5.8.1 is the latest upstream release. Its short-lived client does not mutate a TLS root CA configuration between an initial and resumed connection; remove when upstream rebuilds with a fixed Go toolchain.
+
+  - id: CVE-2026-56854
+    paths:
+      - usr/local/bin/sops
+    expired_at: 2026-10-15
+    statement: SOPS 3.13.3 is the latest upstream release. The vulnerable SSH server source-address authorization path is not exposed by this client CLI; remove when SOPS publishes a rebuild with x/crypto 0.55.0 or later.

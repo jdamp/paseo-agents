@@ -1,0 +1,12 @@
+{
+  "name": "paseo-agent-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned Node.js tools included in the Paseo agent image",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@openai/codex": "0.153.4",
+    "pi-mcp-adapter": "2.32.1"
+  }
+}
