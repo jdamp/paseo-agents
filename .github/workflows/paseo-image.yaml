@@ -32,17 +32,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.3.0
 
-      - name: Read pinned versions
+      - name: Resolve latest upstream versions
         id: versions
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          versions="$(images/paseo/resolve-versions.sh)"
+          printf '%s\n' "$versions"
           set -a
-          source images/paseo/versions.env
+          source <(printf '%s\n' "$versions")
           set +a
-          CODEX_VERSION="$(jq -r '.dependencies["@openai/codex"]' images/paseo/package.json)"
-          PI_VERSION="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' images/paseo/package.json)"
-          PI_MCP_ADAPTER_VERSION="$(jq -r '.dependencies["pi-mcp-adapter"]' images/paseo/package.json)"
           IMAGE_VERSION="${PASEO_VERSION}-codex${CODEX_VERSION}-pi${PI_VERSION}"
           {
             echo "image_version=${IMAGE_VERSION}"

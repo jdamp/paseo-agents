@@ -38,9 +38,13 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/paseo-agent-tools
-COPY images/paseo/package.json images/paseo/package-lock.json ./
 RUN set -eux; \
-    npm ci --omit=dev --ignore-scripts; \
+    : "${CODEX_VERSION:?}" "${PI_VERSION:?}" "${PI_MCP_ADAPTER_VERSION:?}"; \
+    npm init --yes >/dev/null; \
+    npm install --omit=dev --ignore-scripts --save-exact \
+      "@openai/codex@${CODEX_VERSION}" \
+      "@earendil-works/pi-coding-agent@${PI_VERSION}" \
+      "pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION}"; \
     npm cache clean --force; \
     ln -s /opt/paseo-agent-tools/node_modules/.bin/codex /usr/local/bin/codex; \
     ln -s /opt/paseo-agent-tools/node_modules/.bin/pi /usr/local/bin/pi; \

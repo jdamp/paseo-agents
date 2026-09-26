@@ -2,5 +2,3 @@
 !images/
 !images/paseo/
 !images/paseo/Dockerfile
-!images/paseo/package.json
-!images/paseo/package-lock.json
