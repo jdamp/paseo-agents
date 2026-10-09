@@ -50,7 +50,7 @@ jobs:
             echo "paseo_version=${PASEO_VERSION}"
             echo "paseo_digest=${PASEO_DIGEST}"
             echo "build_args<<BUILD_ARGS"
-            for name in PASEO_VERSION PASEO_DIGEST KUBECTL_VERSION KUSTOMIZE_VERSION HELM_VERSION SOPS_VERSION KUBESEAL_VERSION GH_VERSION CODEX_VERSION PI_VERSION PI_MCP_ADAPTER_VERSION; do
+            for name in PASEO_VERSION PASEO_DIGEST KUBECTL_VERSION KUSTOMIZE_VERSION HELM_VERSION SOPS_VERSION KUBESEAL_VERSION GH_VERSION CODEX_VERSION PI_VERSION PI_MCP_ADAPTER_VERSION GO_VERSION GO_SHA256 PLAYWRIGHT_VERSION; do
               printf '%s=%s\n' "$name" "${!name}"
             done
             printf 'BUILD_DATE=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

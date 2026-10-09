@@ -16,6 +16,9 @@ ARG GH_VERSION
 ARG CODEX_VERSION
 ARG PI_VERSION
 ARG PI_MCP_ADAPTER_VERSION
+ARG GO_VERSION
+ARG GO_SHA256
+ARG PLAYWRIGHT_VERSION
 ARG BUILD_DATE="unknown"
 ARG REVISION="unknown"
 ARG IMAGE_VERSION="unknown"
@@ -27,28 +30,46 @@ RUN set -eux; \
     apt-get update; \
     apt-get install --yes --no-install-recommends \
       ca-certificates \
+      build-essential \
       curl \
       fd-find \
       git \
       jq \
       openssh-client \
+      postgresql-client \
       ripgrep \
       tar; \
     ln -s /usr/bin/fdfind /usr/local/bin/fd; \
     rm -rf /var/lib/apt/lists/*
 
+ENV PATH="/usr/local/go/bin:/home/paseo/go/bin:${PATH}" \
+    PLAYWRIGHT_BROWSERS_PATH="/opt/playwright-browsers"
+
+RUN set -eux; \
+    : "${GO_VERSION:?}" "${GO_SHA256:?}"; \
+    curl --fail --location --retry 3 --silent --show-error \
+      "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" --output /tmp/go.tar.gz; \
+    echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum --check --status; \
+    tar -C /usr/local -xzf /tmp/go.tar.gz; \
+    rm /tmp/go.tar.gz
+
 WORKDIR /opt/paseo-agent-tools
 RUN set -eux; \
-    : "${CODEX_VERSION:?}" "${PI_VERSION:?}" "${PI_MCP_ADAPTER_VERSION:?}"; \
+    : "${CODEX_VERSION:?}" "${PI_VERSION:?}" "${PI_MCP_ADAPTER_VERSION:?}" "${PLAYWRIGHT_VERSION:?}"; \
     npm init --yes >/dev/null; \
     npm install --omit=dev --ignore-scripts --save-exact \
       "@openai/codex@${CODEX_VERSION}" \
       "@earendil-works/pi-coding-agent@${PI_VERSION}" \
-      "pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION}"; \
+      "pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION}" \
+      "playwright@${PLAYWRIGHT_VERSION}"; \
+    ./node_modules/.bin/playwright install --with-deps chromium; \
+    chown -R paseo:paseo "$PLAYWRIGHT_BROWSERS_PATH"; \
     npm cache clean --force; \
     ln -s /opt/paseo-agent-tools/node_modules/.bin/codex /usr/local/bin/codex; \
     ln -s /opt/paseo-agent-tools/node_modules/.bin/pi /usr/local/bin/pi; \
     ln -s /opt/paseo-agent-tools/node_modules/.bin/pi-mcp-adapter /usr/local/bin/pi-mcp-adapter; \
+    ln -s /opt/paseo-agent-tools/node_modules/.bin/playwright /usr/local/bin/playwright; \
+    rm -rf /var/lib/apt/lists/*; \
     rm -rf /home/paseo/.npm
 
 RUN set -eux; \
@@ -105,6 +126,8 @@ LABEL org.opencontainers.image.title="Paseo with Codex and Pi" \
       io.paseo.base.digest="${PASEO_DIGEST}" \
       io.paseo.codex.version="${CODEX_VERSION}" \
       io.paseo.pi.version="${PI_VERSION}" \
-      io.paseo.pi-mcp-adapter.version="${PI_MCP_ADAPTER_VERSION}"
+      io.paseo.pi-mcp-adapter.version="${PI_MCP_ADAPTER_VERSION}" \
+      io.paseo.go.version="${GO_VERSION}" \
+      io.paseo.playwright.version="${PLAYWRIGHT_VERSION}"
 
 EXPOSE 6767

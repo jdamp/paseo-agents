@@ -19,6 +19,11 @@ docker run --rm --env "EXPECTED_ADAPTER_VERSION=${adapter_version}" "$image" sh 
   command -v pi-mcp-adapter
   test "$(node -p "require(\"/opt/paseo-agent-tools/node_modules/pi-mcp-adapter/package.json\").version")" = "$EXPECTED_ADAPTER_VERSION"
   git --version
+  go version
+  cc --version | head -1
+  psql --version
+  pg_isready --version
+  playwright --version
   gh --version
   kubectl version --client
   kustomize version
@@ -30,6 +35,28 @@ docker run --rm --env "EXPECTED_ADAPTER_VERSION=${adapter_version}" "$image" sh 
   touch /workspace/non-root-write-test
   rm /workspace/non-root-write-test
 '
+
+# Exercise compilation and the actual browser as the runtime user, including
+# when a persistent home hides files from the image's original home directory.
+docker run --rm -i --tmpfs /home/paseo:uid=1000,gid=1000 "$image" sh -euc '
+  tmp="$(mktemp -d)"
+  trap '\''rm -rf "$tmp"'\'' EXIT
+  printf '\''package main\nimport "fmt"\nfunc main() { fmt.Print("go-smoke-ok") }\n'\'' > "$tmp/main.go"
+  test "$(GOTOOLCHAIN=local go run "$tmp/main.go")" = go-smoke-ok
+  node
+' <<'JS'
+const { chromium } = require('/opt/paseo-agent-tools/node_modules/playwright');
+(async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<title>playwright-smoke-ok</title>');
+    if (await page.title() !== 'playwright-smoke-ok') throw new Error('Unexpected page title');
+  } finally {
+    await browser.close();
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+JS
 
 docker run --detach --name "$container" --tmpfs /home/paseo:uid=1000,gid=1000 --tmpfs /workspace:uid=1000,gid=1000 "$image" >/dev/null
 for _ in $(seq 1 60); do
